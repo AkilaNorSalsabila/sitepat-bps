@@ -1,0 +1,26 @@
+# Memanggil endpoint pengingat KGB tiga kali sehari: 08.00, 09.00, dan 11.00 WIB.
+# (Vercel gratis hanya boleh menjadwalkan sekali sehari, jadi jam tambahan dijalankan dari sini.)
+# Isi Secrets di GitHub: Settings > Secrets and variables > Actions
+#   APP_URL     = https://nama-aplikasi.vercel.app   (tanpa garis miring di akhir)
+#   CRON_SECRET = sama persis dengan CRON_SECRET di Vercel
+name: Pengingat KGB
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 08.00 WIB
+    - cron: '0 2 * * *'   # 09.00 WIB
+    - cron: '0 4 * * *'   # 11.00 WIB
+  workflow_dispatch: {}   # tombol "Run workflow" untuk mencoba manual
+
+jobs:
+  kirim:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Panggil endpoint pengingat
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error --max-time 60 --retry 2 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/kgb"

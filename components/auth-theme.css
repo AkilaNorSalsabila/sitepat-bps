@@ -1,0 +1,13 @@
+/* Warna SiTepat, mengikuti prototipe SiKGB. Ganti di sini, semua halaman ikut berubah. */
+:root {
+  --st-navy: #002d5f;         /* sidebar dan panel kiri halaman login */
+  --st-navy-hover: #00234a;
+  --st-navy-active: #001a38;
+  --st-accent: #0160dc;       /* tombol dan menu aktif */
+  --st-accent-hover: #004fbb;
+  --st-accent-active: #00419a;
+  --st-sky: #3fa3dd;          /* cincin fokus input */
+  --st-link: #0160dc;
+  --st-gold: #d4a94f;
+  --st-page: #f4f8fd;
+}
