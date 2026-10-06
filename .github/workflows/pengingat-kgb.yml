@@ -1,15 +1,17 @@
-# Memanggil endpoint pengingat KGB tiga kali sehari: 08.00, 09.00, dan 11.00 WIB.
+# Memanggil endpoint pengingat KGB empat kali sehari: sekitar 08.07, 09.07, 11.07, dan 15.07 WIB.
+# (Menit 7 dipilih agar tidak bentrok dengan antrean GitHub yang padat di jam bulat.)
 # (Vercel gratis hanya boleh menjadwalkan sekali sehari, jadi jam tambahan dijalankan dari sini.)
 # Isi Secrets di GitHub: Settings > Secrets and variables > Actions
-#   APP_URL     = https://nama-aplikasi.vercel.app   (tanpa garis miring di akhir)
+#   APP_URL     = https://sitepat-bps.vercel.app   (tanpa garis miring di akhir)
 #   CRON_SECRET = sama persis dengan CRON_SECRET di Vercel
 name: Pengingat KGB
 
 on:
   schedule:
-    - cron: '0 1 * * *'   # 08.00 WIB
-    - cron: '0 2 * * *'   # 09.00 WIB
-    - cron: '0 4 * * *'   # 11.00 WIB
+    - cron: '7 1 * * *'   # sekitar 08.07 WIB
+    - cron: '7 2 * * *'   # sekitar 09.07 WIB
+    - cron: '7 4 * * *'   # sekitar 11.07 WIB
+    - cron: '7 8 * * *'   # sekitar 15.07 WIB
   workflow_dispatch: {}   # tombol "Run workflow" untuk mencoba manual
 
 jobs:

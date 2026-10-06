@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 // Pengingat aktif mulai 1 bulan sebelum KGB (lihat mulaiPengurusan di lib/kgb.ts), dikirim pada jam-jam JADWAL_JAM (WIB) setiap hari,
 // sampai admin menekan "Tandai selesai" (jadwal pindah 2 tahun ke depan, pengingat berhenti).
-const JADWAL_JAM = [8, 9, 11];
+const JADWAL_JAM = [8, 9, 11, 15];
 
 type Item = {
   pegawai_id: string;

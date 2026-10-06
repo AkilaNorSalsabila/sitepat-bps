@@ -8,6 +8,14 @@ import { Avatar, Badge, ConfirmDialog, IKON, Icon, IconButton, Modal, btnGhost, 
 import PegawaiForm from '@/components/PegawaiForm';
 import ImportExcel from '@/components/ImportExcel';
 
+type Riwayat = { id: number; pegawai_id: string; tanggal_kgb: string; diproses_at: string };
+
+const GRID_JADWAL = 'lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,1fr)_128px]';
+const GRID_SELESAI = 'lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)]';
+
+const tglProses = (ts: string) =>
+  new Date(ts).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+
 export default function PegawaiPage() {
   return (
     <Suspense fallback={<p className="text-sm text-slate-500">Memuat...</p>}>
@@ -33,14 +41,51 @@ function Centang({ label, value, onChange }: { label: string; value: boolean; on
   );
 }
 
+function ChipTahun({
+  hitung,
+  nilai,
+  onPilih,
+}: {
+  hitung: Map<string, number>;
+  nilai: string;
+  onPilih: (t: string) => void;
+}) {
+  const daftar = [...hitung.keys()].sort();
+  if (daftar.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Saring menurut tahun">
+      <span className="text-xs font-semibold text-slate-500 mr-1">Tahun KGB</span>
+      {['semua', ...daftar].map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => onPilih(t)}
+          aria-pressed={nilai === t}
+          className={`text-xs font-semibold px-3.5 py-2 rounded-full ring-1 ring-inset transition ${
+            nilai === t ? 'bg-[var(--st-navy)] text-white ring-[var(--st-navy)]' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          {t === 'semua' ? 'Semua' : t}
+          {t !== 'semua' && <span className={`ml-1.5 ${nilai === t ? 'text-sky-200' : 'text-slate-400'}`}>{hitung.get(t)}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function DaftarPegawai() {
   const sp = useSearchParams();
   const [rows, setRows] = useState<Pegawai[]>([]);
+  const [riwayat, setRiwayat] = useState<Riwayat[]>([]);
   const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState('');
+  const [galatRiwayat, setGalatRiwayat] = useState('');
+  const [tab, setTab] = useState<'jadwal' | 'selesai'>('jadwal');
   const [cari, setCari] = useState(sp.get('cari') ?? '');
   const [semua, setSemua] = useState(false);
   const [segera, setSegera] = useState(sp.get('tampil') === 'segera');
+  const [tahunJadwal, setTahunJadwal] = useState('semua');
+  const [tahunSelesai, setTahunSelesai] = useState('semua');
   const [tick, setTick] = useState(0);
   const [form, setForm] = useState<{ data: Pegawai | null } | null>(null);
   const [impor, setImpor] = useState(false);
@@ -54,13 +99,18 @@ function DaftarPegawai() {
   useEffect(() => {
     let batal = false;
     const muat = async () => {
-      const { data, error } = await supabase
-        .from('pegawai')
-        .select('*')
-        .order('kgb_berikutnya', { ascending: true, nullsFirst: false });
+      const [pg, rw] = await Promise.all([
+        supabase.from('pegawai').select('*').order('kgb_berikutnya', { ascending: true, nullsFirst: false }),
+        supabase.from('kgb_riwayat').select('id, pegawai_id, tanggal_kgb, diproses_at').order('diproses_at', { ascending: false }),
+      ]);
       if (batal) return;
-      if (error) setGalat(error.message);
-      else setRows(data as Pegawai[]);
+      if (pg.error) setGalat(pg.error.message);
+      else setRows(pg.data as Pegawai[]);
+      if (rw.error) setGalatRiwayat(rw.error.message);
+      else {
+        setGalatRiwayat('');
+        setRiwayat(rw.data as Riwayat[]);
+      }
       setMemuat(false);
     };
     muat();
@@ -108,12 +158,40 @@ function DaftarPegawai() {
   };
 
   const kata = cari.trim().toLowerCase();
-  const tampil = rows.filter(
+  const cocokKata = (p: Pegawai) => !kata || p.nama.toLowerCase().includes(kata) || p.nip.includes(kata);
+
+  /* ---- Tab "Jadwal KGB" ---- */
+  const dasar = rows.filter((p) => semua || p.status === 'aktif');
+  const hitungJadwal = new Map<string, number>();
+  for (const p of dasar) {
+    if (!p.kgb_berikutnya) continue;
+    const t = p.kgb_berikutnya.slice(0, 4);
+    hitungJadwal.set(t, (hitungJadwal.get(t) ?? 0) + 1);
+  }
+  const thJadwal = tahunJadwal === 'semua' || hitungJadwal.has(tahunJadwal) ? tahunJadwal : 'semua';
+
+  const tampil = dasar.filter(
     (p) =>
-      (semua || p.status === 'aktif') &&
+      (thJadwal === 'semua' || !!p.kgb_berikutnya?.startsWith(thJadwal)) &&
       (!segera || (p.status === 'aktif' && dalamMasaPengurusan(p.kgb_berikutnya))) &&
-      (!kata || p.nama.toLowerCase().includes(kata) || p.nip.includes(kata))
+      cocokKata(p)
   );
+
+  /* ---- Tab "Sudah selesai" (dari tabel kgb_riwayat) ---- */
+  const petaPegawai = new Map(rows.map((p) => [p.id, p]));
+  const hitungSelesai = new Map<string, number>();
+  for (const r of riwayat) {
+    const t = r.tanggal_kgb.slice(0, 4);
+    hitungSelesai.set(t, (hitungSelesai.get(t) ?? 0) + 1);
+  }
+  const thSelesai = tahunSelesai === 'semua' || hitungSelesai.has(tahunSelesai) ? tahunSelesai : 'semua';
+
+  const tampilSelesai = riwayat.filter((r) => {
+    const p = petaPegawai.get(r.pegawai_id);
+    return (thSelesai === 'semua' || r.tanggal_kgb.startsWith(thSelesai)) && (!kata || (!!p && cocokKata(p)));
+  });
+
+  const jumlah = tab === 'jadwal' ? tampil.length : tampilSelesai.length;
 
   return (
     <div className="space-y-5">
@@ -121,7 +199,7 @@ function DaftarPegawai() {
         <div className="mr-auto">
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Data pegawai</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {memuat ? 'Memuat data...' : `${tampil.length} pegawai ditampilkan`}
+            {memuat ? 'Memuat data...' : tab === 'jadwal' ? `${jumlah} pegawai ditampilkan` : `${jumlah} catatan KGB selesai`}
           </p>
         </div>
         <button className={btnGhost} onClick={() => setImpor(true)}>
@@ -130,6 +208,28 @@ function DaftarPegawai() {
         <button className={btnPrimary} onClick={() => setForm({ data: null })}>
           <Icon d={IKON.tambah} /> Tambah pegawai
         </button>
+      </div>
+
+      {/* Pilihan tampilan */}
+      <div className="inline-flex p-1 rounded-xl bg-slate-100" role="tablist">
+        {(
+          [
+            ['jadwal', 'Jadwal KGB'],
+            ['selesai', `Sudah selesai${riwayat.length ? ` (${riwayat.length})` : ''}`],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg transition ${
+              tab === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -144,85 +244,149 @@ function DaftarPegawai() {
             onChange={(e) => setCari(e.target.value)}
           />
         </div>
-        <Centang label="Perlu diproses (1 bulan sebelum)" value={segera} onChange={setSegera} />
-        <Centang label="Tampilkan non-aktif" value={semua} onChange={setSemua} />
+        {tab === 'jadwal' && (
+          <>
+            <Centang label="Perlu diproses (1 bulan sebelum)" value={segera} onChange={setSegera} />
+            <Centang label="Tampilkan non-aktif" value={semua} onChange={setSemua} />
+          </>
+        )}
       </div>
+
+      {tab === 'jadwal' ? (
+        <ChipTahun hitung={hitungJadwal} nilai={thJadwal} onPilih={setTahunJadwal} />
+      ) : (
+        <ChipTahun hitung={hitungSelesai} nilai={thSelesai} onPilih={setTahunSelesai} />
+      )}
 
       {galat && (
         <p className="text-sm text-red-700 bg-red-50 ring-1 ring-inset ring-red-200 rounded-xl px-4 py-3">{galat}</p>
       )}
 
-      <div className="bg-white rounded-2xl ring-1 ring-slate-200/80 shadow-sm shadow-slate-900/[0.03] overflow-hidden">
-        {/* Kepala kolom (layar lebar) */}
-        <div className="hidden lg:grid grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,1fr)_128px] gap-4 px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-xs font-semibold text-slate-500">
-          <span>Pegawai</span>
-          <span>KGB berikutnya</span>
-          <span>Status</span>
-          <span>Sumber</span>
-          <span className="text-right">Aksi</span>
-        </div>
-
-        {memuat && <p className="p-6 text-sm text-slate-500">Memuat...</p>}
-
-        {!memuat && tampil.length === 0 && (
-          <div className="py-14 px-6 text-center">
-            <span className="mx-auto w-12 h-12 rounded-full bg-slate-100 text-slate-400 grid place-items-center">
-              <Icon d={IKON.kosong} className="w-6 h-6" />
-            </span>
-            <p className="mt-3 font-semibold text-slate-700">Tidak ada data</p>
-            <p className="text-sm text-slate-500">Ubah pencarian, atau gunakan Impor Excel / Tambah pegawai.</p>
+      {tab === 'jadwal' ? (
+        <div className="bg-white rounded-2xl ring-1 ring-slate-200/80 shadow-sm shadow-slate-900/[0.03] overflow-hidden">
+          <div className={`hidden lg:grid ${GRID_JADWAL} gap-4 px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-xs font-semibold text-slate-500`}>
+            <span>Pegawai</span>
+            <span>KGB berikutnya</span>
+            <span>Status</span>
+            <span>Sumber</span>
+            <span className="text-right">Aksi</span>
           </div>
-        )}
 
-        <ul className="divide-y divide-slate-100">
-          {tampil.map((p) => {
-            const s = statusKgb(p.kgb_berikutnya);
-            const aktif = p.status === 'aktif';
-            return (
-              <li
-                key={p.id}
-                className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,1fr)_128px] gap-x-4 gap-y-2 px-5 py-4 items-center hover:bg-slate-50/60 transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Avatar nama={p.nama} />
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-900 truncate">{p.nama}</p>
-                    <p className="text-xs text-slate-500 truncate">{[p.jabatan, p.golongan].filter(Boolean).join(' · ') || '-'}</p>
-                    <p className="text-xs text-slate-400 font-mono tabular-nums">{p.nip}</p>
+          {memuat && <p className="p-6 text-sm text-slate-500">Memuat...</p>}
+
+          {!memuat && tampil.length === 0 && (
+            <div className="py-14 px-6 text-center">
+              <span className="mx-auto w-12 h-12 rounded-full bg-slate-100 text-slate-400 grid place-items-center">
+                <Icon d={IKON.kosong} className="w-6 h-6" />
+              </span>
+              <p className="mt-3 font-semibold text-slate-700">Tidak ada data</p>
+              <p className="text-sm text-slate-500">Ubah pencarian, atau gunakan Impor Excel / Tambah pegawai.</p>
+            </div>
+          )}
+
+          <ul className="divide-y divide-slate-100">
+            {tampil.map((p) => {
+              const s = statusKgb(p.kgb_berikutnya);
+              const aktif = p.status === 'aktif';
+              return (
+                <li
+                  key={p.id}
+                  className={`grid grid-cols-1 ${GRID_JADWAL} gap-x-4 gap-y-2 px-5 py-4 items-center hover:bg-slate-50/60 transition-colors`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar nama={p.nama} />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{p.nama}</p>
+                      <p className="text-xs text-slate-500 truncate">{[p.jabatan, p.golongan].filter(Boolean).join(' · ') || '-'}</p>
+                      <p className="text-xs text-slate-400 font-mono tabular-nums">{p.nip}</p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="text-sm">
-                  <p className="font-semibold text-slate-800">{aktif ? formatTanggal(p.kgb_berikutnya) : '-'}</p>
-                  {aktif && p.kgb_berikutnya && (
-                    <p className="text-xs text-slate-500">Mulai urus {formatTanggal(mulaiPengurusan(p.kgb_berikutnya))}</p>
-                  )}
-                </div>
+                  <div className="text-sm">
+                    <p className="font-semibold text-slate-800">{aktif ? formatTanggal(p.kgb_berikutnya) : '-'}</p>
+                    {aktif && p.kgb_berikutnya && (
+                      <p className="text-xs text-slate-500">Mulai urus {formatTanggal(mulaiPengurusan(p.kgb_berikutnya))}</p>
+                    )}
+                  </div>
 
-                <div>{aktif ? <Badge tone={s.nada}>{s.label}</Badge> : <Badge>{p.status}</Badge>}</div>
+                  <div>{aktif ? <Badge tone={s.nada}>{s.label}</Badge> : <Badge>{p.status}</Badge>}</div>
 
-                <div>
-                  <Badge
-                    titik={false}
-                    tone={p.sumber === 'pengecualian' ? 'kuning' : p.sumber === 'manual' ? 'biru' : 'hijau'}
-                    title={p.alasan ?? undefined}
-                  >
-                    {p.sumber}
-                  </Badge>
-                </div>
+                  <div>
+                    <Badge
+                      titik={false}
+                      tone={p.sumber === 'pengecualian' ? 'kuning' : p.sumber === 'manual' ? 'biru' : 'hijau'}
+                      title={p.alasan ?? undefined}
+                    >
+                      {p.sumber}
+                    </Badge>
+                  </div>
 
-                <div className="flex items-center justify-end gap-0.5 -mr-2">
-                  {aktif && p.kgb_berikutnya && (
-                    <IconButton d={IKON.selesai} label="Tandai selesai" tone="hijau" onClick={() => setSelesai(p)} />
-                  )}
-                  <IconButton d={IKON.ubah} label="Ubah" tone="biru" onClick={() => setForm({ data: p })} />
-                  <IconButton d={IKON.hapus} label="Hapus" tone="merah" onClick={() => setHapus(p)} />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+                  <div className="flex items-center justify-end gap-0.5 -mr-2">
+                    {aktif && p.kgb_berikutnya && (
+                      <IconButton d={IKON.selesai} label="Tandai selesai" tone="hijau" onClick={() => setSelesai(p)} />
+                    )}
+                    <IconButton d={IKON.ubah} label="Ubah" tone="biru" onClick={() => setForm({ data: p })} />
+                    <IconButton d={IKON.hapus} label="Hapus" tone="merah" onClick={() => setHapus(p)} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl ring-1 ring-slate-200/80 shadow-sm shadow-slate-900/[0.03] overflow-hidden">
+          <div className={`hidden lg:grid ${GRID_SELESAI} gap-4 px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-xs font-semibold text-slate-500`}>
+            <span>Pegawai</span>
+            <span>KGB yang diselesaikan</span>
+            <span>Ditandai selesai pada</span>
+            <span>Jadwal berikutnya</span>
+          </div>
+
+          {galatRiwayat && (
+            <p className="m-4 text-sm text-red-700 bg-red-50 ring-1 ring-inset ring-red-200 rounded-xl px-4 py-3">
+              Riwayat tidak bisa dibaca: {galatRiwayat}. Kemungkinan tabel kgb_riwayat belum punya policy SELECT di Supabase.
+            </p>
+          )}
+
+          {memuat && <p className="p-6 text-sm text-slate-500">Memuat...</p>}
+
+          {!memuat && !galatRiwayat && tampilSelesai.length === 0 && (
+            <div className="py-14 px-6 text-center">
+              <span className="mx-auto w-12 h-12 rounded-full bg-slate-100 text-slate-400 grid place-items-center">
+                <Icon d={IKON.selesai} className="w-6 h-6" />
+              </span>
+              <p className="mt-3 font-semibold text-slate-700">Belum ada KGB yang ditandai selesai</p>
+              <p className="text-sm text-slate-500">Setelah SK selesai, tekan ikon centang hijau di tab Jadwal KGB.</p>
+            </div>
+          )}
+
+          <ul className="divide-y divide-slate-100">
+            {tampilSelesai.map((r) => {
+              const p = petaPegawai.get(r.pegawai_id);
+              return (
+                <li
+                  key={r.id}
+                  className={`grid grid-cols-1 ${GRID_SELESAI} gap-x-4 gap-y-2 px-5 py-4 items-center hover:bg-slate-50/60 transition-colors`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar nama={p?.nama ?? '?'} />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{p?.nama ?? '(pegawai sudah dihapus)'}</p>
+                      <p className="text-xs text-slate-500 truncate">{[p?.jabatan, p?.golongan].filter(Boolean).join(' · ') || '-'}</p>
+                      <p className="text-xs text-slate-400 font-mono tabular-nums">{p?.nip ?? '-'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <Badge tone="hijau">{formatTanggal(r.tanggal_kgb)}</Badge>
+                  </div>
+                  <p className="text-sm text-slate-700">{tglProses(r.diproses_at)}</p>
+                  <p className="text-sm text-slate-700">{p?.kgb_berikutnya ? formatTanggal(p.kgb_berikutnya) : '-'}</p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {form && (
         <Modal title={form.data ? 'Ubah pegawai' : 'Tambah pegawai'} onClose={() => setForm(null)}>

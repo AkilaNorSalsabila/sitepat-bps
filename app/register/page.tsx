@@ -65,6 +65,8 @@ export default function RegisterPage() {
         email: cleanEmail,
         password,
         options: {
+          // Tautan di email konfirmasi kembali ke alamat situs ini (harus terdaftar di Supabase > URL Configuration)
+          emailRedirectTo: `${window.location.origin}/login`,
           data: {
             full_name: cleanFullName,
             username: cleanUsername,

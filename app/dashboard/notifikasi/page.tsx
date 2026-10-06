@@ -156,7 +156,7 @@ export default function NotifikasiPage() {
       <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
         <h2 className="font-bold text-slate-900">Kapan pengingat dikirim</h2>
         <p className="text-sm text-slate-600">
-          Mulai 1 bulan sebelum tanggal KGB (KGB 5 November, mulai 5 Oktober), pengingat dikirim <b>tiga kali sehari</b>: jam 08.00, 09.00, dan 11.00 WIB.
+          Mulai 1 bulan sebelum tanggal KGB (KGB 5 November, mulai 5 Oktober), pengingat dikirim <b>empat kali sehari</b>: jam 08.00, 09.00, 11.00, dan 15.00 WIB.
           Emailnya cukup sekali sehari. Pengingat terus berulang setiap hari, termasuk setelah lewat jatuh tempo,
           sampai admin menekan <b>Tandai selesai</b> di menu Data pegawai. Setelah itu pengingatnya berhenti dan
           jadwal pindah 2 tahun ke depan.
