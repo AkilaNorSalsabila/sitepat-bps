@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Pegawai, bacaNip, cocokNip, formatBulan, kgbDariNip } from '@/lib/kgb';
+import { Pegawai, bacaNip, cocokNip, formatBulan, formatTanggal, kgbDariNip, mulaiPengurusan } from '@/lib/kgb';
 import { inputClass, labelClass } from '@/components/AuthShell';
 import { AuthAlert } from '@/components/AuthShell';
 import { btnGhost, btnPrimary } from '@/components/ui';
@@ -24,7 +24,7 @@ export default function PegawaiForm({
   const [golongan, setGolongan] = useState(data?.golongan ?? '');
   const [jenis, setJenis] = useState<'pns' | 'p3k'>(data?.jenis ?? 'pns');
   const [status, setStatus] = useState<'aktif' | 'pensiun' | 'pindah'>(data?.status ?? 'aktif');
-  const [bulan, setBulan] = useState(data?.kgb_berikutnya?.slice(0, 7) ?? ''); // format YYYY-MM
+  const [tanggal, setTanggal] = useState(data?.kgb_berikutnya ?? ''); // format YYYY-MM-DD
   const [alasan, setAlasan] = useState(data?.alasan ?? '');
   const [sedang, setSedang] = useState(false);
   const [galat, setGalat] = useState('');
@@ -33,7 +33,7 @@ export default function PegawaiForm({
   const infoNip = nipLengkap ? bacaNip(nip) : null;
   const adaBulanNip = !!infoNip?.bulanValid;
   const usulan = useMemo(() => (nipLengkap ? kgbDariNip(nip) : null), [nip, nipLengkap]);
-  const iso = bulan ? `${bulan}-01` : null;
+  const iso = tanggal || null;
   const beda = adaBulanNip && !!iso && !cocokNip(nip, iso);
 
   const ubahNip = (v: string) => {
@@ -43,10 +43,7 @@ export default function PegawaiForm({
 
     const p = bacaNip(bersih);
     if (p) setJenis(p.jenis);
-    if (!bulan) {
-      const u = kgbDariNip(bersih);
-      if (u) setBulan(u.slice(0, 7));
-    }
+    // Tanggal tidak diisi otomatis: NIP hanya memuat bulan, harinya harus dari data kepegawaian
   };
 
   const simpan = async (e: React.FormEvent) => {
@@ -55,7 +52,7 @@ export default function PegawaiForm({
 
     if (!nipLengkap) return setGalat('NIP harus 18 digit angka.');
     if (!nama.trim()) return setGalat('Nama wajib diisi.');
-    if (status === 'aktif' && !iso) return setGalat('Isi bulan KGB berikutnya.');
+    if (status === 'aktif' && !iso) return setGalat('Isi tanggal KGB berikutnya.');
     if (beda && !alasan.trim()) return setGalat('Tanggal berbeda dari hitungan NIP. Isi alasannya.');
 
     const payload = {
@@ -130,23 +127,28 @@ export default function PegawaiForm({
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="bulan" className={labelClass}>KGB berikutnya (bulan dan tahun)</label>
-        <input id="bulan" type="month" className={inputClass} value={bulan} onChange={(e) => setBulan(e.target.value)} disabled={sedang} />
+        <label htmlFor="tanggal" className={labelClass}>Tanggal KGB berikutnya</label>
+        <input id="tanggal" type="date" className={inputClass} value={tanggal} onChange={(e) => setTanggal(e.target.value)} disabled={sedang} />
+        {iso && (
+          <p className="text-xs text-slate-500">
+            Mulai diurus: <b>{formatTanggal(mulaiPengurusan(iso))}</b> (1 bulan sebelum KGB)
+          </p>
+        )}
         {usulan && (
           <p className="text-xs text-slate-500">
-            Usulan dari NIP: <b>{formatBulan(usulan)}</b>{' '}
-            {iso !== usulan && (
-              <button type="button" className="text-[var(--st-link)] font-semibold hover:underline" onClick={() => setBulan(usulan.slice(0, 7))}>
-                pakai usulan
+            Usulan bulan dari NIP: <b>{formatBulan(usulan)}</b>. Tanggalnya isi sesuai data kepegawaian.{' '}
+            {!iso?.startsWith(usulan.slice(0, 7)) && (
+              <button type="button" className="text-[var(--st-link)] font-semibold hover:underline" onClick={() => setTanggal(usulan)}>
+                pakai bulan ini
               </button>
             )}
           </p>
         )}
         {infoNip?.jenis === 'p3k' && adaBulanNip && (
-          <p className="text-xs text-slate-500">P3K: bulan diambil dari NIP. Tahunnya silakan sesuaikan dengan data kepegawaian.</p>
+          <p className="text-xs text-slate-500">P3K: bulan diambil dari NIP. Tahun dan tanggalnya sesuaikan dengan data kepegawaian.</p>
         )}
         {nipLengkap && !adaBulanNip && (
-          <p className="text-xs text-slate-500">Bulan tidak terbaca dari NIP, isi manual dari data kepegawaian.</p>
+          <p className="text-xs text-slate-500">Bulan tidak terbaca dari NIP, isi tanggal manual dari data kepegawaian.</p>
         )}
       </div>
 

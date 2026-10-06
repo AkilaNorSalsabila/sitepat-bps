@@ -17,6 +17,7 @@ self.addEventListener('push', (event) => {
       tag: data.tag || 'sitepat',
       renotify: true,
       requireInteraction: true, // tetap tampil sampai ditutup (di komputer)
+      actions: [{ action: 'buka', title: 'Buka data' }],
       vibrate: [200, 100, 200],
       data: { url: data.url || '/dashboard/pegawai' },
     })

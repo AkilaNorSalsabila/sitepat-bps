@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { BarisImpor, bacaExcel } from '@/lib/impor';
-import { formatBulan } from '@/lib/kgb';
+import { formatTanggal } from '@/lib/kgb';
 import { AuthAlert } from '@/components/AuthShell';
 import { Badge, btnGhost, btnPrimary } from '@/components/ui';
 
@@ -91,7 +91,7 @@ export default function ImportExcel({ onClose, onDone }: { onClose: () => void; 
                 {baris.map((b) => (
                   <tr key={b.nip} className={`border-t border-slate-100 ${b.ada ? 'opacity-50' : ''}`}>
                     <td className="p-2">{b.nama}</td>
-                    <td className="p-2 whitespace-nowrap">{b.status === 'pensiun' ? 'Pensiun' : formatBulan(b.kgb_berikutnya)}</td>
+                    <td className="p-2 whitespace-nowrap">{b.status === 'pensiun' ? 'Pensiun' : formatTanggal(b.kgb_berikutnya)}</td>
                     <td className="p-2">
                       <Badge tone={b.sumber === 'pengecualian' ? 'kuning' : b.sumber === 'manual' ? 'biru' : 'hijau'}>{b.sumber}</Badge>
                     </td>

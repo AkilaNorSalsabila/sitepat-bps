@@ -1,19 +1,30 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Pegawai, formatBulan, statusKgb, tambahTahun } from '@/lib/kgb';
+import { Pegawai, dalamMasaPengurusan, formatTanggal, mulaiPengurusan, statusKgb, tambahTahun } from '@/lib/kgb';
 import { Badge, Modal, btnGhost, btnPrimary } from '@/components/ui';
 import { inputClass } from '@/components/AuthShell';
 import PegawaiForm from '@/components/PegawaiForm';
 import ImportExcel from '@/components/ImportExcel';
 
 export default function PegawaiPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-slate-500">Memuat...</p>}>
+      <DaftarPegawai />
+    </Suspense>
+  );
+}
+
+function DaftarPegawai() {
+  const sp = useSearchParams();
   const [rows, setRows] = useState<Pegawai[]>([]);
   const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState('');
-  const [cari, setCari] = useState('');
+  const [cari, setCari] = useState(sp.get('cari') ?? '');
   const [semua, setSemua] = useState(false);
+  const [segera, setSegera] = useState(sp.get('tampil') === 'segera');
   const [tick, setTick] = useState(0);
   const [form, setForm] = useState<{ data: Pegawai | null } | null>(null);
   const [impor, setImpor] = useState(false);
@@ -42,7 +53,7 @@ export default function PegawaiPage() {
     if (!p.kgb_berikutnya) return;
     const baru = tambahTahun(p.kgb_berikutnya, 2);
     const ok = window.confirm(
-      `Tandai KGB ${p.nama} (${formatBulan(p.kgb_berikutnya)}) selesai?\nJadwal berikutnya: ${formatBulan(baru)}.`
+      `Tandai KGB ${p.nama} (${formatTanggal(p.kgb_berikutnya)}) selesai?\nJadwal berikutnya: ${formatTanggal(baru)}.`
     );
     if (!ok) return;
 
@@ -53,7 +64,10 @@ export default function PegawaiPage() {
 
   const kata = cari.trim().toLowerCase();
   const tampil = rows.filter(
-    (p) => (semua || p.status === 'aktif') && (!kata || p.nama.toLowerCase().includes(kata) || p.nip.includes(kata))
+    (p) =>
+      (semua || p.status === 'aktif') &&
+      (!segera || (p.status === 'aktif' && dalamMasaPengurusan(p.kgb_berikutnya))) &&
+      (!kata || p.nama.toLowerCase().includes(kata) || p.nip.includes(kata))
   );
 
   return (
@@ -66,6 +80,10 @@ export default function PegawaiPage() {
           value={cari}
           onChange={(e) => setCari(e.target.value)}
         />
+        <label className="text-xs text-slate-600 flex items-center gap-1.5">
+          <input type="checkbox" checked={segera} onChange={(e) => setSegera(e.target.checked)} />
+          Perlu diproses (1 bulan sebelum)
+        </label>
         <label className="text-xs text-slate-600 flex items-center gap-1.5">
           <input type="checkbox" checked={semua} onChange={(e) => setSemua(e.target.checked)} />
           Tampilkan non-aktif
@@ -104,7 +122,10 @@ export default function PegawaiPage() {
                     <p className="text-xs text-slate-400 font-mono">{p.nip}</p>
                   </td>
                   <td className="p-3 whitespace-nowrap">
-                    {p.status === 'aktif' ? formatBulan(p.kgb_berikutnya) : '-'}
+                    {p.status === 'aktif' ? formatTanggal(p.kgb_berikutnya) : '-'}
+                    {p.status === 'aktif' && p.kgb_berikutnya && (
+                      <span className="block text-xs text-slate-400">Mulai urus: {formatTanggal(mulaiPengurusan(p.kgb_berikutnya))}</span>
+                    )}
                   </td>
                   <td className="p-3">
                     {p.status === 'aktif' ? <Badge tone={s.nada}>{s.label}</Badge> : <Badge>{p.status}</Badge>}

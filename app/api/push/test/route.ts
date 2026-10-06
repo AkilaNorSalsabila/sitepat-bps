@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const hasil = await kirimPush(subs, {
       title: 'Tes notifikasi SiTepat',
-      body: 'Notifikasi berfungsi. Pengingat KGB akan muncul seperti ini.',
+      body: 'Contoh isi pengingat:\n• Budi Santoso: Oktober 2026 (sisa 12 hari)\nSiapkan SK KGB, lalu tekan "Tandai selesai" agar pengingat berhenti.',
       url: '/dashboard/pegawai',
       tag: 'tes',
     });

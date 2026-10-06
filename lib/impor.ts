@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { BULAN, bacaNip, cocokNip, formatBulan, geserSampaiBerjalan, isoBulan } from './kgb';
+import { BULAN, bacaNip, cocokNip, formatTanggal, geserSampaiBerjalan } from './kgb';
 
 export type BarisImpor = {
   nip: string;
@@ -18,11 +18,40 @@ export type BarisImpor = {
 
 const teks = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim());
 
-function bacaBulanTahun(t: string): string | null {
-  const pola = new RegExp(`(${BULAN.map((b) => b.toLowerCase()).join('|')})\\s+(\\d{4})`);
-  const m = t.toLowerCase().match(pola);
-  if (!m) return null;
-  return isoBulan(Number(m[2]), BULAN.findIndex((b) => b.toLowerCase() === m[1]) + 1);
+const NAMA_BULAN = BULAN.map((b) => b.toLowerCase());
+const p2 = (n: number) => String(n).padStart(2, '0');
+
+function susun(y: number, m: number, d: number): string | null {
+  if (m < 1 || m > 12 || d < 1 || d > new Date(Date.UTC(y, m, 0)).getUTCDate()) return null;
+  return `${y}-${p2(m)}-${p2(d)}`;
+}
+
+// Membaca tanggal KGB dari sel Excel. "lengkap" = ada tanggalnya; kalau hanya bulan dan tahun, dipakai tanggal 1.
+// Format yang dikenali: sel tanggal Excel, 2026-11-05, 05/11/2026, 5 November 2026, November 2026.
+function bacaTanggal(v: unknown): { iso: string; lengkap: boolean } | null {
+  if (typeof v === 'number' && v > 20000 && v < 80000) {
+    const d = new Date(Math.round((v - 25569) * 86400000)); // nomor seri Excel
+    return { iso: d.toISOString().slice(0, 10), lengkap: true };
+  }
+  const t = teks(v).toLowerCase();
+  let m: RegExpMatchArray | null;
+
+  if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) {
+    const iso = susun(+m[1], +m[2], +m[3]);
+    return iso ? { iso, lengkap: true } : null;
+  }
+  if ((m = t.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/))) {
+    const iso = susun(+m[3], +m[2], +m[1]);
+    return iso ? { iso, lengkap: true } : null;
+  }
+  if ((m = t.match(new RegExp(`(\\d{1,2})\\s+(${NAMA_BULAN.join('|')})\\s+(\\d{4})`)))) {
+    const iso = susun(+m[3], NAMA_BULAN.indexOf(m[2]) + 1, +m[1]);
+    return iso ? { iso, lengkap: true } : null;
+  }
+  if ((m = t.match(new RegExp(`(${NAMA_BULAN.join('|')})\\s+(\\d{4})`)))) {
+    return { iso: `${m[2]}-${p2(NAMA_BULAN.indexOf(m[1]) + 1)}-01`, lengkap: false };
+  }
+  return null;
 }
 
 export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: BarisImpor[]; galat: string | null } {
@@ -77,7 +106,8 @@ export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: Baris
       continue; // baris penomoran kolom atau baris kosong
     }
 
-    const kgbTeks = cKgb.map((i) => teks(r[i])).find((t) => t && t !== '-') ?? '';
+    const kgbRaw = cKgb.map((i) => r[i]).find((v) => teks(v) && teks(v) !== '-');
+    const kgbTeks = teks(kgbRaw);
     const p = bacaNip(nip);
     const p3k = p?.jenis === 'p3k' || /p3k/i.test(jabatan ?? '');
     const bulanDariNip = !!p?.bulanValid;
@@ -96,15 +126,17 @@ export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: Baris
       continue;
     }
 
-    const asli = bacaBulanTahun(kgbTeks);
-    if (!asli) {
-      baru.error = 'Tanggal KGB tidak terbaca (harus seperti "Desember 2026").';
+    const baca = bacaTanggal(kgbRaw);
+    if (!baca) {
+      baru.error = 'Tanggal KGB tidak terbaca (contoh: "5 November 2026" atau "05/11/2026").';
       baris.push(baru);
       continue;
     }
+    const asli = baca.iso;
+    if (!baca.lengkap) catatan.push('Excel hanya berisi bulan, dipakai tanggal 1. Sesuaikan tanggalnya lewat tombol Ubah');
 
     const iso = geserSampaiBerjalan(asli, now);
-    if (iso !== asli) catatan.push(`Excel: ${formatBulan(asli)}, sudah lewat, digeser ke ${formatBulan(iso)}`);
+    if (iso !== asli) catatan.push(`Excel: ${formatTanggal(asli)}, sudah lewat, digeser ke ${formatTanggal(iso)}`);
     baru.kgb_berikutnya = iso;
 
     if (!bulanDariNip) {

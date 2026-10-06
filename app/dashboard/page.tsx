@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { Pegawai, formatBulan, statusKgb } from '@/lib/kgb';
+import { Pegawai, formatTanggal, statusKgb } from '@/lib/kgb';
 import { Badge } from '@/components/ui';
 
 export default function RingkasanPage() {
@@ -35,8 +35,8 @@ export default function RingkasanPage() {
 
   const kartu = [
     { label: 'Pegawai aktif', nilai: rows.length, warna: 'text-slate-900' },
-    { label: 'Terlambat / bulan ini', nilai: mendesak, warna: 'text-red-600' },
-    { label: 'Dalam 30 hari', nilai: segera, warna: 'text-amber-600' },
+    { label: 'Terlambat / hari ini', nilai: mendesak, warna: 'text-red-600' },
+    { label: 'Perlu diproses', nilai: segera, warna: 'text-amber-600' },
     { label: 'Pengecualian NIP', nilai: pengecualian, warna: 'text-sky-700' },
   ];
 
@@ -67,7 +67,7 @@ export default function RingkasanPage() {
               return (
                 <li key={p.id} className="px-4 py-2.5 border-t border-slate-100 first:border-t-0 flex items-center gap-3 text-sm">
                   <span className="flex-1 font-medium text-slate-800">{p.nama}</span>
-                  <span className="text-slate-500">{formatBulan(p.kgb_berikutnya)}</span>
+                  <span className="text-slate-500">{formatTanggal(p.kgb_berikutnya)}</span>
                   <Badge tone={s.nada}>{s.label}</Badge>
                 </li>
               );

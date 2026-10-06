@@ -1,5 +1,6 @@
 // Semua aturan perhitungan KGB ada di sini.
-// Tanggal disimpan sebagai teks "YYYY-MM-01" (selalu tanggal 1) supaya bebas masalah zona waktu.
+// Tanggal KGB disimpan lengkap sebagai teks "YYYY-MM-DD" (bebas masalah zona waktu).
+// Data lama yang tersimpan tanggal 01 tetap terbaca, tinggal diperbaiki lewat tombol Ubah.
 
 export type Pegawai = {
   id: string;
@@ -29,11 +30,19 @@ export function formatBulan(iso: string | null): string {
   return `${BULAN[m - 1]} ${y}`;
 }
 
+export function formatTanggal(iso: string | null): string {
+  if (!iso) return '-';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} ${BULAN[m - 1]} ${y}`;
+}
+
 export const awalBulanIni = (now = new Date()) => isoBulan(now.getFullYear(), now.getMonth() + 1);
 
+// Tambah n tahun, tanggal dipertahankan (29 Februari -> 28 Februari kalau tahun tujuan bukan kabisat)
 export function tambahTahun(iso: string, n: number): string {
-  const [y, m] = iso.split('-').map(Number);
-  return isoBulan(y + n, m);
+  const [y, m, d] = iso.split('-').map(Number);
+  const hariTerakhir = new Date(Date.UTC(y + n, m, 0)).getUTCDate();
+  return `${y + n}-${pad(m)}-${pad(Math.min(d || 1, hariTerakhir))}`;
 }
 
 // Tanggal yang sudah lewat dianggap sudah diproses: geser +2 tahun sampai bulan ini atau sesudahnya.
@@ -100,6 +109,25 @@ export const hariIniLokal = (now = new Date()) =>
 // Untuk server (Vercel berjalan di UTC): ambil tanggal hari ini menurut WIB
 export const hariIniWIB = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
+// Kurangi n bulan dari tanggal ISO (YYYY-MM-DD). Kalau tanggalnya tidak ada di bulan tujuan
+// (mis. 31 Maret -> Februari), dipakai hari terakhir bulan tujuan. Jangan pakai "tanggal - 30 hari".
+export function kurangiBulan(iso: string, n = 1): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const total = y * 12 + (m - 1) - n;
+  const ty = Math.floor(total / 12);
+  const tm = total % 12; // 0-based
+  const hariTerakhir = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+  return `${ty}-${pad(tm + 1)}-${pad(Math.min(d, hariTerakhir))}`;
+}
+
+// Aturan mentor: SK KGB mulai diurus 1 bulan sebelum jatuh tempo.
+// Contoh: KGB 5 November 2026 -> mulai diurus 5 Oktober 2026.
+export const mulaiPengurusan = (kgb: string) => kurangiBulan(kgb, 1);
+
+// Sudah masuk masa pengurusan (termasuk yang sudah lewat jatuh tempo)?
+export const dalamMasaPengurusan = (kgb: string | null, hariIni = hariIniWIB()) =>
+  !!kgb && hariIni >= mulaiPengurusan(kgb);
+
 export type NadaStatus = 'merah' | 'kuning' | 'hijau' | 'abu';
 
 export function statusKgb(
@@ -108,12 +136,11 @@ export function statusKgb(
 ): { label: string; nada: NadaStatus; hari: number | null } {
   if (!iso) return { label: 'Tidak ada jadwal', nada: 'abu', hari: null };
 
-  const hari = selisihHari(iso, hariIniLokal(now));
-  const [y, m] = iso.split('-').map(Number);
-  const selisihBulan = (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth());
+  const hariIni = hariIniLokal(now);
+  const hari = selisihHari(iso, hariIni);
 
-  if (selisihBulan < 0) return { label: 'Terlambat', nada: 'merah', hari };
-  if (selisihBulan === 0) return { label: 'Bulan ini', nada: 'merah', hari };
-  if (hari <= 30) return { label: `H-${hari}`, nada: 'kuning', hari };
+  if (hari < 0) return { label: 'Terlambat', nada: 'merah', hari };
+  if (hari === 0) return { label: 'Jatuh tempo hari ini', nada: 'merah', hari };
+  if (dalamMasaPengurusan(iso, hariIni)) return { label: `Perlu diproses · sisa ${hari} hari`, nada: 'kuning', hari };
   return { label: 'Aman', nada: 'hijau', hari };
 }
