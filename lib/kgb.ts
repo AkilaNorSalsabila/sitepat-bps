@@ -53,47 +53,37 @@ export function geserSampaiBerjalan(iso: string, now = new Date()): string {
   return hasil;
 }
 
-// NIP PNS : 8 digit lahir + 6 digit TMT (tahun+bulan) + 1 digit jenis kelamin + 3 digit urut
-// NIP P3K : 8 digit lahir + 4 digit tahun TMT + "21" + 2 digit bulan TMT + 2 digit urut
+// NIP PNS : 8 digit lahir + 4 digit tahun TMT + 2 digit bulan TMT (01-12) + 1 digit jenis kelamin + 3 digit urut
+// NI PPPK : 8 digit lahir + 4 digit tahun pengangkatan + 2 digit kode perjanjian kerja (21, 24, dst; selalu > 12)
+//           + 1 digit jenis kelamin + 3 digit urut. NI PPPK TIDAK memuat bulan, jadi jadwal KGB wajib diisi manual.
 export function bacaNip(nip: string) {
   if (!/^\d{18}$/.test(nip)) return null;
   const tmtTahun = Number(nip.slice(8, 12));
-  const bulanPns = Number(nip.slice(12, 14));
+  const kode = Number(nip.slice(12, 14));
 
-  if (bulanPns >= 1 && bulanPns <= 12) {
-    return { jenis: 'pns' as const, tmtTahun, tmtBulan: bulanPns, bulanValid: true };
+  if (kode >= 1 && kode <= 12) {
+    return { jenis: 'pns' as const, tmtTahun, tmtBulan: kode, bulanValid: true };
   }
-
-  const bulanP3k = Number(nip.slice(14, 16));
-  if (nip.slice(12, 14) === '21' && bulanP3k >= 1 && bulanP3k <= 12) {
-    return { jenis: 'p3k' as const, tmtTahun, tmtBulan: bulanP3k, bulanValid: true };
+  if (kode > 12) {
+    return { jenis: 'p3k' as const, tmtTahun, tmtBulan: 0, bulanValid: false };
   }
-
-  return { jenis: 'p3k' as const, tmtTahun, tmtBulan: 0, bulanValid: false };
+  return null;
 }
 
-// Usulan jadwal dari NIP.
-// PNS: bulan TMT, berulang tiap 2 tahun, ambil yang terdekat (bulan ini atau sesudahnya).
-// P3K: bulan TMT saja (tahunnya mengikuti data kepegawaian), ambil bulan itu yang terdekat.
+// Usulan jadwal dari NIP. Hanya PNS: bulan TMT, berulang tiap 2 tahun, ambil yang terdekat (bulan ini atau sesudahnya).
+// P3K tidak punya bulan di NIP, jadi null (tanggal diisi manual dari SK).
 export function kgbDariNip(nip: string, now = new Date()): string | null {
   const p = bacaNip(nip);
   if (!p || !p.bulanValid) return null;
-
-  if (p.jenis === 'p3k') {
-    const tahunIni = isoBulan(now.getFullYear(), p.tmtBulan);
-    return tahunIni < awalBulanIni(now) ? tambahTahun(tahunIni, 1) : tahunIni;
-  }
-
   return geserSampaiBerjalan(isoBulan(p.tmtTahun + 2, p.tmtBulan), now);
 }
 
-// Apakah tanggal ini sesuai NIP?
-// PNS: bulan sama dan selisih tahun dari TMT genap. P3K: cukup bulannya sama.
+// Apakah tanggal ini sesuai NIP? Hanya PNS: bulan sama dan selisih tahun dari TMT genap.
+// P3K selalu false (tidak bisa diperiksa dari NIP), sehingga sumbernya menjadi 'manual'.
 export function cocokNip(nip: string, iso: string): boolean {
   const p = bacaNip(nip);
   if (!p || !p.bulanValid) return false;
   const [y, m] = iso.split('-').map(Number);
-  if (p.jenis === 'p3k') return m === p.tmtBulan;
   return m === p.tmtBulan && y > p.tmtTahun && (y - p.tmtTahun) % 2 === 0;
 }
 

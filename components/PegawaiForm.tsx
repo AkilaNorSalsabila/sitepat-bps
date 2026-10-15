@@ -144,11 +144,12 @@ export default function PegawaiForm({
             )}
           </p>
         )}
-        {infoNip?.jenis === 'p3k' && adaBulanNip && (
-          <p className="text-xs text-slate-500">P3K: bulan diambil dari NIP. Tahun dan tanggalnya sesuaikan dengan data kepegawaian.</p>
-        )}
         {nipLengkap && !adaBulanNip && (
-          <p className="text-xs text-slate-500">Bulan tidak terbaca dari NIP, isi tanggal manual dari data kepegawaian.</p>
+          <p className="text-xs text-slate-500">
+            {infoNip?.jenis === 'p3k'
+              ? 'NIP P3K tidak memuat bulan KGB. Isi tanggal dari SK atau data kepegawaian.'
+              : 'Bulan tidak terbaca dari NIP, isi tanggal manual dari data kepegawaian.'}
+          </p>
         )}
       </div>
 

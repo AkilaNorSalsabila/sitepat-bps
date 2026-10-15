@@ -13,7 +13,7 @@ export type BarisImpor = {
   alasan: string | null;
   catatan: string[];
   error?: string;
-  ada?: boolean; // NIP sudah ada di database, akan dilewati
+  ada?: boolean; 
 };
 
 const teks = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim());
@@ -103,7 +103,7 @@ export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: Baris
           sumber: 'nip', alasan: null, catatan: [], error: 'NIP harus 18 digit.',
         });
       }
-      continue; // baris penomoran kolom atau baris kosong
+      continue; 
     }
 
     const kgbRaw = cKgb.map((i) => r[i]).find((v) => teks(v) && teks(v) !== '-');
@@ -140,13 +140,11 @@ export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: Baris
     baru.kgb_berikutnya = iso;
 
     if (!bulanDariNip) {
-      catatan.push('Bulan tidak terbaca dari NIP, tanggal manual dari Excel');
+      catatan.push(p3k ? 'P3K: bulan tidak ada di NIP, tanggal dari Excel' : 'Bulan tidak terbaca dari NIP, tanggal manual dari Excel');
     } else if (!cocokNip(nip, iso)) {
       baru.sumber = 'pengecualian';
       baru.alasan = 'Sesuai data Excel awal, berbeda dari hitungan NIP.';
       catatan.push('Berbeda dari hitungan NIP');
-    } else if (p3k) {
-      catatan.push('P3K: bulan sesuai NIP, tahun dari Excel');
     }
 
     baris.push(baru);
