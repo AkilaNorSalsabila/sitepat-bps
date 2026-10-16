@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { sinkronPush } from '@/lib/push-client';
+import { pasangPendengarBunyi } from '@/lib/bunyi';
 import { IKON, Icon } from '@/components/ui';
 import '@/components/auth-theme.css';
 
@@ -49,6 +51,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Daftarkan service worker (syarat PWA dan push notification)
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   }, [router]);
+
+  // Putar suara kustom saat ada push masuk dan SiTepat sedang terbuka
+  useEffect(() => pasangPendengarBunyi(), []);
+
+  // Setelah login terkonfirmasi: pastikan perangkat ini tetap terdaftar untuk push.
+  // Dijalankan saat dashboard dibuka dan saat tab kembali aktif (paling sering sekali per 30 menit).
+  useEffect(() => {
+    if (!nama) return;
+    let terakhir = 0;
+    const sinkron = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - terakhir < 30 * 60 * 1000) return;
+      terakhir = Date.now();
+      sinkronPush().catch(() => {});
+    };
+    sinkron();
+    document.addEventListener('visibilitychange', sinkron);
+    return () => document.removeEventListener('visibilitychange', sinkron);
+  }, [nama]);
 
   const keluar = async () => {
     await supabase.auth.signOut();

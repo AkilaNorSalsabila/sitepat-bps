@@ -10,17 +10,23 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = { body: event.data && event.data.text() }; }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'SiTepat', {
-      body: data.body || '',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: data.tag || 'sitepat',
-      renotify: true,
-      requireInteraction: true, // tetap tampil sampai ditutup (di komputer)
-      actions: [{ action: 'buka', title: 'Buka data' }],
-      vibrate: [200, 100, 200],
-      data: { url: data.url || '/dashboard/pegawai' },
-    })
+    (async () => {
+      await self.registration.showNotification(data.title || 'SiTepat', {
+        body: data.body || '',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: data.tag || 'sitepat',
+        renotify: true,
+        requireInteraction: true, // tetap tampil sampai ditutup (di komputer)
+        actions: [{ action: 'buka', title: 'Buka data' }],
+        vibrate: [200, 100, 200],
+        data: { url: data.url || '/dashboard/pegawai' },
+      });
+
+      // Kalau SiTepat masih terbuka di tab mana pun, minta halamannya memutar suara kustom
+      const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const c of list) c.postMessage({ type: 'bunyi' });
+    })()
   );
 });
 
