@@ -74,23 +74,33 @@ export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: Baris
   }
 
   const baris: BarisImpor[] = [];
+  const dilihat = new Set<string>(); // untuk mendeteksi NIP ganda di dalam file
 
   for (const r of aoa.slice(hIdx + 1)) {
     const rawNip = r[cNip];
-    if (rawNip === null || rawNip === '') continue;
 
     const nama = teks(r[cNama]);
     const jabatan = teks(r[cJab]) || null;
     const golongan = teks(r[cGol]) || null;
     const dasar = { nama, jabatan, golongan };
 
+    // "Baris data" = baris yang jelas isinya pegawai (nama ada huruf + ada jabatan/golongan/KGB).
+    // Baris nomor kolom (1, 2, 3 ...) atau baris catatan tidak termasuk, jadi tidak dianggap bermasalah.
+    const barisData = /[a-z]/i.test(nama) && (!!jabatan || !!golongan || cKgb.some((i) => teks(r[i]) !== ''));
+
+    const kosongBermasalah = (pesan: string, nip = ''): BarisImpor => ({
+      ...dasar, nip, jenis: 'pns', status: 'aktif', kgb_berikutnya: null,
+      sumber: 'nip', alasan: null, catatan: [], error: pesan,
+    });
+
+    if (rawNip === null || teks(rawNip) === '') {
+      if (barisData) baris.push(kosongBermasalah('NIP kosong. Isi NIP 18 digit.'));
+      continue;
+    }
+
     // NIP yang tersimpan sebagai angka di Excel kehilangan digit terakhir
     if (typeof rawNip === 'number' && rawNip > 1e14) {
-      baris.push({
-        ...dasar, nip: String(rawNip), jenis: 'pns', status: 'aktif', kgb_berikutnya: null,
-        sumber: 'nip', alasan: null, catatan: [],
-        error: 'NIP tersimpan sebagai angka. Ubah kolom NIP menjadi teks di Excel.',
-      });
+      baris.push(kosongBermasalah('NIP tersimpan sebagai angka. Ubah kolom NIP menjadi teks di Excel.', String(rawNip)));
       continue;
     }
 
@@ -98,13 +108,18 @@ export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: Baris
 
     if (!/^\d{18}$/.test(nip)) {
       if (nip.length >= 10) {
-        baris.push({
-          ...dasar, nip, jenis: 'pns', status: 'aktif', kgb_berikutnya: null,
-          sumber: 'nip', alasan: null, catatan: [], error: 'NIP harus 18 digit.',
-        });
+        baris.push(kosongBermasalah('NIP harus 18 digit.', nip));
+      } else if (barisData) {
+        baris.push(kosongBermasalah(`NIP tidak valid ("${nip}"). Isi NIP 18 digit.`, nip));
       }
       continue; 
     }
+
+    if (dilihat.has(nip)) {
+      baris.push(kosongBermasalah('NIP ganda di file ini. Baris pertama yang dipakai, baris ini diabaikan.', nip));
+      continue;
+    }
+    dilihat.add(nip);
 
     const kgbRaw = cKgb.map((i) => r[i]).find((v) => teks(v) && teks(v) !== '-');
     const kgbTeks = teks(kgbRaw);
@@ -128,7 +143,10 @@ export function bacaExcel(buffer: ArrayBuffer, now = new Date()): { baris: Baris
 
     const baca = bacaTanggal(kgbRaw);
     if (!baca) {
-      baru.error = 'Tanggal KGB tidak terbaca (contoh: "5 November 2026" atau "05/11/2026").';
+      baru.error =
+        kgbTeks === ''
+          ? 'Tanggal KGB kosong. Isi tanggal KGB, atau tulis "Pensiun ..." kalau sudah pensiun.'
+          : `Tanggal KGB "${kgbTeks}" tidak terbaca (contoh: "5 November 2026" atau "05/11/2026").`;
       baris.push(baru);
       continue;
     }

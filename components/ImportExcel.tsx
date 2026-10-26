@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { BarisImpor, bacaExcel } from '@/lib/impor';
 import { formatTanggal } from '@/lib/kgb';
 import { AuthAlert } from '@/components/AuthShell';
+import PanduanImpor from '@/components/PanduanImpor';
 import { Badge, btnGhost, btnPrimary } from '@/components/ui';
 
 export default function ImportExcel({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
@@ -35,7 +36,7 @@ export default function ImportExcel({ onClose, onDone }: { onClose: () => void; 
   };
 
   const siap = (baris ?? []).filter((b) => !b.error && !b.ada);
-  const dilewati = (baris ?? []).filter((b) => b.ada).length;
+  const dilewati = (baris ?? []).filter((b) => b.ada && !b.error).length;
   const bermasalah = (baris ?? []).filter((b) => b.error).length;
 
   const simpan = async () => {
@@ -59,6 +60,9 @@ export default function ImportExcel({ onClose, onDone }: { onClose: () => void; 
 
   return (
     <div className="space-y-4">
+      {/* Panduan terbuka sebelum ada file, otomatis tertutup setelah pratinjau muncul */}
+      <PanduanImpor key={baris ? 'tutup' : 'buka'} terbuka={!baris} />
+
       <AuthAlert type="info">
         Impor dipakai untuk memasukkan data awal. NIP yang sudah ada di sistem dilewati dan tidak pernah ditimpa.
       </AuthAlert>
@@ -71,11 +75,18 @@ export default function ImportExcel({ onClose, onDone }: { onClose: () => void; 
       {baris && (
         <>
           <p className="text-sm text-slate-700">
-            <b>{siap.length}</b> siap diimpor
+            <b>{baris.length}</b> baris terbaca: <b>{siap.length}</b> siap diimpor
             {dilewati > 0 && <>, {dilewati} sudah ada (dilewati)</>}
-            {bermasalah > 0 && <>, <span className="text-red-600">{bermasalah} bermasalah</span></>}.{' '}
+            {bermasalah > 0 && <>, <span className="text-red-600 font-semibold">{bermasalah} bermasalah</span></>}.{' '}
             {siap.filter((b) => b.sumber === 'pengecualian').length} pengecualian NIP.
           </p>
+
+          {bermasalah > 0 && (
+            <AuthAlert type="error">
+              {bermasalah} baris bermasalah (merah di tabel) tidak akan diimpor. Perbaiki di Excel lalu pilih file lagi, atau lanjutkan
+              dan tambahkan pegawai itu manual lewat tombol Tambah pegawai.
+            </AuthAlert>
+          )}
 
           <div className="overflow-auto max-h-72 border border-slate-200 rounded-lg">
             <table className="w-full text-xs">
@@ -88,12 +99,17 @@ export default function ImportExcel({ onClose, onDone }: { onClose: () => void; 
                 </tr>
               </thead>
               <tbody>
-                {baris.map((b) => (
-                  <tr key={b.nip} className={`border-t border-slate-100 ${b.ada ? 'opacity-50' : ''}`}>
-                    <td className="p-2">{b.nama}</td>
-                    <td className="p-2 whitespace-nowrap">{b.status === 'pensiun' ? 'Pensiun' : formatTanggal(b.kgb_berikutnya)}</td>
+                {baris.map((b, i) => (
+                  <tr
+                    key={`${b.nip}-${i}`}
+                    className={`border-t border-slate-100 ${b.error ? 'bg-red-50/70' : ''} ${b.ada && !b.error ? 'opacity-50' : ''}`}
+                  >
+                    <td className="p-2">{b.nama || <span className="text-slate-400">(tanpa nama)</span>}</td>
+                    <td className="p-2 whitespace-nowrap">
+                      {b.error ? '-' : b.status === 'pensiun' ? 'Pensiun' : formatTanggal(b.kgb_berikutnya)}
+                    </td>
                     <td className="p-2">
-                      <Badge tone={b.sumber === 'pengecualian' ? 'kuning' : b.sumber === 'manual' ? 'biru' : 'hijau'}>{b.sumber}</Badge>
+                      {b.error ? '-' : <Badge tone={b.sumber === 'pengecualian' ? 'kuning' : b.sumber === 'manual' ? 'biru' : 'hijau'}>{b.sumber}</Badge>}
                     </td>
                     <td className="p-2 text-slate-500">
                       {b.error ? <span className="text-red-600">{b.error}</span> : b.ada ? 'Sudah ada' : b.catatan.join('; ')}
